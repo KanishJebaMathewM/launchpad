@@ -276,69 +276,6 @@ export default function DeployRepositoryPage() {
         });
         setBranches(names);
         setBranchName(prev => (prev.trim() && names.includes(prev.trim()) ? prev : defaultBranch));
-
-        // Try to detect languages from metacall.json
-        try {
-          let rawUrl = '';
-          if (info.provider === 'github') {
-            rawUrl = `https://raw.githubusercontent.com/${info.owner}/${info.repo}`;
-          } else {
-            rawUrl = `https://gitlab.com/${info.owner}/${info.repo}/-/raw`;
-          }
-          const metacallUrl = `${rawUrl}/${defaultBranch}/metacall.json`;
-          const metacallRes = await fetch(metacallUrl);
-          if (metacallRes.ok) {
-            const metacallData = (await metacallRes.json()) as {
-              runtime?: string | string[];
-              runtimes?: string[];
-              language?: string;
-              languages?: string[];
-            };
-
-            let langs: string[] = [];
-
-            // Extract languages from various possible fields
-            if (metacallData.runtimes && Array.isArray(metacallData.runtimes)) {
-              langs = metacallData.runtimes;
-            } else if (metacallData.runtime) {
-              langs = Array.isArray(metacallData.runtime)
-                ? metacallData.runtime
-                : [metacallData.runtime];
-            } else if (metacallData.languages && Array.isArray(metacallData.languages)) {
-              langs = metacallData.languages;
-            } else if (metacallData.language) {
-              langs = [metacallData.language];
-            }
-
-            // Normalize language names
-            if (langs.length > 0) {
-              const normalizedLangs = langs.map(l => {
-                const normalized = l.toLowerCase().trim();
-                if (
-                  normalized.includes('node') ||
-                  normalized.includes('javascript') ||
-                  normalized.includes('js')
-                )
-                  return 'Node.js';
-                if (normalized.includes('python') || normalized.includes('py')) return 'Python';
-                if (normalized.includes('ruby') || normalized.includes('rb')) return 'Ruby';
-                if (normalized.includes('go') || normalized.includes('golang')) return 'Go';
-                if (normalized.includes('rust')) return 'Rust';
-                if (normalized.includes('java')) return 'Java';
-                if (
-                  normalized.includes('dotnet') ||
-                  normalized.includes('csharp') ||
-                  normalized.includes('c#')
-                )
-                  return 'C#';
-                return l;
-              });
-              setDetectedLanguages(normalizedLangs.join(' + '));
-            }
-          }
-        } catch {
-          // Silently fail if metacall.json can't be fetched
-        }
       } catch (err: unknown) {
         setBranchFetchError((err as Error).message ?? 'Could not fetch branches.');
       } finally {
@@ -433,7 +370,7 @@ export default function DeployRepositoryPage() {
     return () => {
       active = false;
     };
-  }, [repositoryUrl, branchName, branches]);
+  }, [repositoryUrl, branchName]);
 
   // Show slot occupied warning page
   if (slotOccupied) {
