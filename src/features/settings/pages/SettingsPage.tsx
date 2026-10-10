@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { CopyButton } from '@/shared/ui/CopyButton';
 import { api } from '@/lib/api-client';
+import { useAuth } from '@/features/auth/hooks/useAuth';
 import { LS_TOKEN_KEY, LS_EMAIL_KEY } from '@/shared/constants';
 import { normalizePlan } from '@/shared/lib/plan';
 import { downloadInvoicePDF, formatInvoiceNumber } from '../utils/invoice';
@@ -69,6 +70,7 @@ const PdfIcon = ({ className = '', size = 16 }: PdfIconProps) => (
 
 export default function SettingsPage() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [email] = useState(() => localStorage.getItem(LS_EMAIL_KEY) ?? 'example@gmail.com');
   const [vatId, setVatId] = useState(() => localStorage.getItem('faas_vat_id') ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -230,10 +232,8 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = () => {
     if (!confirm('Delete local account data and sign out?')) return;
-    localStorage.removeItem(LS_TOKEN_KEY);
-    localStorage.removeItem(LS_EMAIL_KEY);
     localStorage.removeItem('faas_vat_id');
-    navigate('/', { replace: true });
+    logout();
   };
 
   return (
