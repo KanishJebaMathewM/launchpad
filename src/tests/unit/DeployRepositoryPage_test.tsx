@@ -1,6 +1,6 @@
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach, Mock, MockInstance } from 'vitest';
 import DeployRepositoryPage from '@/features/deployments/pages/DeployRepositoryPage';
 import { api } from '@/lib/api-client';
 import userEvent from '@testing-library/user-event';
@@ -19,7 +19,7 @@ vi.mock('@/features/deployments/hooks/useDeploymentMonitor', () => ({
 }));
 
 describe('DeployRepositoryPage', () => {
-  let fetchMock: any;
+  let fetchMock: MockInstance;
 
   beforeEach(() => {
     Object.defineProperty(window, 'localStorage', {
@@ -31,8 +31,8 @@ describe('DeployRepositoryPage', () => {
       writable: true,
     });
 
-    (api.listSubscriptions as any).mockResolvedValue({ Free: 1, Pro: 1 });
-    (api.inspect as any).mockResolvedValue([]);
+    (api.listSubscriptions as Mock).mockResolvedValue({ Free: 1, Pro: 1 });
+    (api.inspect as Mock).mockResolvedValue([]);
     fetchMock = vi.spyOn(global, 'fetch').mockImplementation(() => new Promise(() => {}));
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
@@ -176,8 +176,8 @@ describe('DeployRepositoryPage', () => {
   });
 
   it('LP-0008: ensures stale requests do not overwrite language state', async () => {
-    let resolveMain: any;
-    let resolveDev: any;
+    let resolveMain: () => void;
+    let resolveDev: () => void;
 
     fetchMock.mockImplementation((url: string) => {
       if (url.includes('api.github.com/repos/metacall/core/branches')) {
