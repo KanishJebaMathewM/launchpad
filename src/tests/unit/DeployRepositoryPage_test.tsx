@@ -1,6 +1,15 @@
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { vi, describe, it, expect, beforeEach, afterEach, Mock, MockInstance } from 'vitest';
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+  type MockInstance,
+} from 'vitest';
 import DeployRepositoryPage from '@/features/deployments/pages/DeployRepositoryPage';
 import { api } from '@/lib/api-client';
 import userEvent from '@testing-library/user-event';

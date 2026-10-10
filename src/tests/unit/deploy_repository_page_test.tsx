@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, act } from '@testing-library/react';
 import DeployRepositoryPage from '@/features/deployments/pages/DeployRepositoryPage';
 import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -55,7 +55,9 @@ describe('DeployRepositoryPage Toast Notifications', () => {
 
     // Simulate the monitor calling onReady
     if (mockOnReady) {
-      mockOnReady({ suffix: 'test-dep' });
+      act(() => {
+        mockOnReady!({ suffix: 'test-dep' });
+      });
     }
 
     await waitFor(() => {
@@ -71,7 +73,9 @@ describe('DeployRepositoryPage Toast Notifications', () => {
     );
 
     if (mockOnFailed) {
-      mockOnFailed('Build failed');
+      act(() => {
+        mockOnFailed!('Build failed');
+      });
     }
 
     await waitFor(() => {

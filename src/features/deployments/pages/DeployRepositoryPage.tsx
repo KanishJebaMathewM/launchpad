@@ -279,6 +279,12 @@ export default function DeployRepositoryPage() {
 
         // Try to detect languages from metacall.json
         try {
+          let rawUrl = '';
+          if (info.provider === 'github') {
+            rawUrl = `https://raw.githubusercontent.com/${info.owner}/${info.repo}`;
+          } else {
+            rawUrl = `https://gitlab.com/${info.owner}/${info.repo}/-/raw`;
+          }
           const metacallUrl = `${rawUrl}/${defaultBranch}/metacall.json`;
           const metacallRes = await fetch(metacallUrl);
           if (metacallRes.ok) {
