@@ -11,11 +11,11 @@ vi.mock('@/lib/api-client', () => ({
     inspect: vi.fn(),
     add: vi.fn(),
     deploy: vi.fn(),
-  }
+  },
 }));
 
 vi.mock('@/features/deployments/hooks/useDeploymentMonitor', () => ({
-  useDeploymentMonitor: () => ({ status: 'create' })
+  useDeploymentMonitor: () => ({ status: 'create' }),
 }));
 
 describe('DeployRepositoryPage', () => {
@@ -47,7 +47,7 @@ describe('DeployRepositoryPage', () => {
     render(
       <MemoryRouter initialEntries={['/deploy?plan=Pro']}>
         <DeployRepositoryPage />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
   };
 
@@ -56,13 +56,13 @@ describe('DeployRepositoryPage', () => {
       if (url.includes('api.github.com/repos/metacall/core/branches')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve([{ name: 'main' }])
+          json: () => Promise.resolve([{ name: 'main' }]),
         });
       }
       if (url.includes('api.github.com/repos/metacall/core')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ default_branch: 'main' })
+          json: () => Promise.resolve({ default_branch: 'main' }),
         });
       }
       if (url.includes('metacall.json')) {
@@ -72,7 +72,7 @@ describe('DeployRepositoryPage', () => {
     });
 
     renderComponent();
-    
+
     const input = screen.getByPlaceholderText('https://github.com/user/repo');
     await userEvent.type(input, 'https://github.com/metacall/core');
 
@@ -82,7 +82,9 @@ describe('DeployRepositoryPage', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/metacall/core');
-      expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/metacall/core/branches?per_page=100');
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.github.com/repos/metacall/core/branches?per_page=100',
+      );
     });
   });
 
@@ -91,13 +93,13 @@ describe('DeployRepositoryPage', () => {
       if (url.includes('gitlab.com/api/v4/projects/metacall%2Fcore/repository/branches')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve([{ name: 'main' }])
+          json: () => Promise.resolve([{ name: 'main' }]),
         });
       }
       if (url.includes('gitlab.com/api/v4/projects/metacall%2Fcore')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ default_branch: 'main' })
+          json: () => Promise.resolve({ default_branch: 'main' }),
         });
       }
       if (url.includes('metacall.json')) {
@@ -107,7 +109,7 @@ describe('DeployRepositoryPage', () => {
     });
 
     renderComponent();
-    
+
     const input = screen.getByPlaceholderText('https://github.com/user/repo');
     await userEvent.type(input, 'https://gitlab.com/metacall/core');
 
@@ -117,7 +119,9 @@ describe('DeployRepositoryPage', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith('https://gitlab.com/api/v4/projects/metacall%2Fcore');
-      expect(fetchMock).toHaveBeenCalledWith('https://gitlab.com/api/v4/projects/metacall%2Fcore/repository/branches?per_page=100');
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://gitlab.com/api/v4/projects/metacall%2Fcore/repository/branches?per_page=100',
+      );
     });
   });
 
@@ -126,32 +130,32 @@ describe('DeployRepositoryPage', () => {
       if (url.includes('api.github.com/repos/metacall/core/branches')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve([{ name: 'dev' }, { name: 'main' }])
+          json: () => Promise.resolve([{ name: 'dev' }, { name: 'main' }]),
         });
       }
       if (url.includes('api.github.com/repos/metacall/core')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ default_branch: 'main' })
+          json: () => Promise.resolve({ default_branch: 'main' }),
         });
       }
       if (url.includes('main/metacall.json')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ language: 'node' })
+          json: () => Promise.resolve({ language: 'node' }),
         });
       }
       if (url.includes('dev/metacall.json')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ language: 'python' })
+          json: () => Promise.resolve({ language: 'python' }),
         });
       }
       return Promise.reject(new Error('unhandled: ' + url));
     });
 
     renderComponent();
-    
+
     const input = screen.getByPlaceholderText('https://github.com/user/repo');
     await userEvent.type(input, 'https://github.com/metacall/core');
 
@@ -183,36 +187,38 @@ describe('DeployRepositoryPage', () => {
       if (url.includes('api.github.com/repos/metacall/core/branches')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve([{ name: 'dev' }, { name: 'main' }])
+          json: () => Promise.resolve([{ name: 'dev' }, { name: 'main' }]),
         });
       }
       if (url.includes('api.github.com/repos/metacall/core')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ default_branch: 'main' })
+          json: () => Promise.resolve({ default_branch: 'main' }),
         });
       }
       if (url.includes('main/metacall.json')) {
         return new Promise(res => {
-          resolveMain = () => res({
-            ok: true,
-            json: () => Promise.resolve({ language: 'node' })
-          });
+          resolveMain = () =>
+            res({
+              ok: true,
+              json: () => Promise.resolve({ language: 'node' }),
+            });
         });
       }
       if (url.includes('dev/metacall.json')) {
         return new Promise(res => {
-          resolveDev = () => res({
-            ok: true,
-            json: () => Promise.resolve({ language: 'python' })
-          });
+          resolveDev = () =>
+            res({
+              ok: true,
+              json: () => Promise.resolve({ language: 'python' }),
+            });
         });
       }
       return Promise.reject(new Error('unhandled: ' + url));
     });
 
     renderComponent();
-    
+
     const input = screen.getByPlaceholderText('https://github.com/user/repo');
     await userEvent.type(input, 'https://github.com/metacall/core');
 
