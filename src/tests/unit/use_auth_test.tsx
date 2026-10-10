@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from '@/features/auth/hooks/useAuth';
 import { api } from '@/lib/api-client';
 
-// TODO: These tests are basic and primarily ensure the auth hook's state management and localStorage interactions work as expected. 
+// TODO: These tests are basic and primarily ensure the auth hook's state management and localStorage interactions work as expected.
 // More comprehensive tests could be added in the future to cover edge cases, error handling, and integration with other components.
 
 vi.mock('@/lib/api-client', () => ({
@@ -16,9 +16,7 @@ vi.mock('@/lib/api-client', () => ({
 
 const mockedApi = vi.mocked(api);
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <AuthProvider>{children}</AuthProvider>
-);
+const wrapper = ({ children }: { children: ReactNode }) => <AuthProvider>{children}</AuthProvider>;
 
 describe('useAuth / AuthProvider', () => {
   beforeEach(() => {
@@ -49,7 +47,7 @@ describe('useAuth / AuthProvider', () => {
       await result.current.login('dev@example.com', 'secret');
     });
 
-    expect(mockedApi.login).toHaveBeenCalledWith('dev@example.com', 'secret');
+    expect(mockedApi.login).toHaveBeenCalledWith('dev@example.com', 'secret', undefined);
     expect(localStorage.getItem('faas_token')).toBe('token-xyz');
     expect(localStorage.getItem('faas_user_email')).toBe('dev@example.com');
     expect(result.current.user).toEqual({ email: 'dev@example.com' });
@@ -63,7 +61,12 @@ describe('useAuth / AuthProvider', () => {
       await result.current.signup('new@example.com', 'secret', 'new-user');
     });
 
-    expect(mockedApi.signup).toHaveBeenCalledWith('new@example.com', 'secret', 'new-user');
+    expect(mockedApi.signup).toHaveBeenCalledWith(
+      'new@example.com',
+      'secret',
+      'new-user',
+      undefined,
+    );
     expect(localStorage.getItem('faas_token')).toBe('token-signup');
     expect(localStorage.getItem('faas_user_email')).toBe('new@example.com');
     expect(result.current.user).toEqual({ email: 'new@example.com' });

@@ -5,7 +5,7 @@
 The dashboard already has a solid frontend base:
 
 - Auth screens, protected routes, and the main app shell are in place.
-- Dashboard, deployments list, deployment detail, logs viewer, settings (UI only), plans (UI only), and chat routes all exist.
+- Dashboard, deployments list, deployment function, logs but now working , settings ui only, plans ui only, and chat routes all exist.
 - ZIP deploy and repository deploy flows are wired to backend calls.
 - Unit tests and Playwright smoke tests are set up.
 
@@ -48,3 +48,26 @@ The dashboard already has a solid frontend base:
 - [ ] Keep generated artifacts out of commits. `dist/`, `playwright-report/`, and `test-results/` should stay local-only.
 - [ ] Add a short contributor workflow for install, run, unit tests, and smoke tests.
 - [ ] Normalize naming and structure in docs so `Dashboard/` paths, scripts, and env usage are easy to follow.
+
+## Local Triad / Launchpad Support
+
+Part of the `metacall/faas` + `metacall/deploy` + `metacall/launchpad` local packaging
+effort. Details: https://github.com/metacall/launchpad/issues/28
+
+- [ ] Add a `main.tsx` bootstrap step that fetches `/__launchpad/config` before the
+      app renders.
+- [ ] Build the FaaS URL resolution chain: launchpad config → `localStorage['faas_url']`
+      → `VITE_FAAS_URL` → same-origin (current behavior last, not first).
+- [ ] If the `/__launchpad/config` fetch 404s or errors, fall through silently to
+      today's behavior — no console errors, no broken render.
+- [ ] Seed `localStorage['faas_token'] = 'local'` when runtime config says
+      `mode: 'local'`, before the router mounts.
+- [ ] Make sure the local-mode token seed only ever runs once and never overwrites a
+      real token a user already logged in with.
+- [ ] Skip the `/login` redirect in `AppRouter.tsx` when running in local mode.
+- [ ] Add a "Local mode — no account" empty state on the Settings page.
+- [ ] Hide or disable the billing/CLI-token panels on the Settings page in local mode.
+- [ ] Add a small "FaaS URL" override field in Settings that writes to
+      `localStorage['faas_url']`, for when a user runs FaaS on a non-default port.
+- [ ] Confirm hosted `dashboard.metacall.io` build is byte-identical when the config
+      probe 404s (no regression for production).

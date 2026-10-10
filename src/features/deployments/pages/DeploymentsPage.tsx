@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Home, Plus, X, AlertTriangle, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { useDeployments } from '@/features/deployments/hooks/useDeployments';
 import { api } from '@/lib/api-client';
 import { DeploymentTable } from '@/features/deployments/components/DeploymentTable';
@@ -26,9 +27,11 @@ export default function DeploymentsPage() {
     setDeleteError(null);
     try {
       await api.deployDelete(dep.prefix, dep.suffix, dep.version ?? 'v1');
+      toast.success('Deployment deleted successfully!');
       setPending(null);
       refetch();
     } catch {
+      toast.error('Delete failed, check server connection.');
       setDeleteError('Delete failed, check server connection.');
     } finally {
       setDeleting(false);
@@ -55,9 +58,7 @@ export default function DeploymentsPage() {
           {/* Page header */}
           <div className="flex flex-wrap items-end justify-between gap-4 pb-2 border-b border-slate-500">
             <div>
-              <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">
-                Deployments
-              </h1>
+              <h1 className="text-2xl font-semibold text-slate-800 tracking-tight">Deployments</h1>
               <p className="text-sm font-semibold text-gray-500 mt-1">
                 {loading
                   ? 'Fetching active deployments…'
@@ -112,9 +113,7 @@ export default function DeploymentsPage() {
 
           {/* Table Container */}
           <div className="bg-white border border-gray-300 w-full relative">
-            {loading && (
-              <LoadingOverlay message="Syncing network…" spinnerSize={16} />
-            )}
+            {loading && <LoadingOverlay message="Syncing network…" spinnerSize={16} />}
             <DeploymentTable deployments={deployments} onDelete={suffix => setPending(suffix)} />
           </div>
         </div>

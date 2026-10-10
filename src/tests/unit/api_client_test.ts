@@ -13,18 +13,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-function makeResponse(
-  status: number,
-  body?: unknown,
-  contentType = 'application/json',
-): Response {
+function makeResponse(status: number, body?: unknown, contentType = 'application/json'): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     headers: { get: (_header: string) => contentType },
     json: () => Promise.resolve(body),
-    text: () =>
-      Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body)),
+    text: () => Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body)),
   } as unknown as Response;
 }
 
@@ -51,9 +46,10 @@ describe('api-client', () => {
 
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     const headers = options.headers;
-    const auth = headers instanceof Headers
-      ? headers.get('Authorization')
-      : (headers as Record<string, string> | undefined)?.['Authorization'];
+    const auth =
+      headers instanceof Headers
+        ? headers.get('Authorization')
+        : (headers as Record<string, string> | undefined)?.['Authorization'];
     // Protocol sends "jwt <token>" (not "Bearer")
     expect(auth).toBe('jwt abc123');
   });
@@ -66,9 +62,10 @@ describe('api-client', () => {
 
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     const headers = options.headers;
-    const auth = headers instanceof Headers
-      ? headers.get('Authorization')
-      : (headers as Record<string, string> | undefined)?.['Authorization'];
+    const auth =
+      headers instanceof Headers
+        ? headers.get('Authorization')
+        : (headers as Record<string, string> | undefined)?.['Authorization'];
     // No token → no auth header (or empty/trimmed)
     expect(!auth || auth === 'jwt ' || auth === 'jwt').toBe(true);
   });
@@ -128,6 +125,84 @@ describe('api-client', () => {
     await expect(api.login('a@b.com', 'pass')).rejects.toThrow(/no token received/i);
   });
 
+  describe('login', () => {
+    it('sends captchaToken in payload when provided', async () => {
+      const api = await loadApi();
+      mockFetch.mockResolvedValueOnce(
+        makeResponse(200, JSON.stringify({ token: 'jwt-token' }), 'text/plain'),
+      );
+
+      await api.login('test@example.com', 'password', 'valid-token');
+
+      const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/login');
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body as string)).toEqual({
+        email: 'test@example.com',
+        password: 'password',
+        'g-recaptcha-response': 'valid-token',
+      });
+    });
+
+    it('sends "empty" for captchaToken when omitted', async () => {
+      const api = await loadApi();
+      mockFetch.mockResolvedValueOnce(
+        makeResponse(200, JSON.stringify({ token: 'jwt-token' }), 'text/plain'),
+      );
+
+      await api.login('test@example.com', 'password');
+
+      const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/login');
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body as string)).toEqual({
+        email: 'test@example.com',
+        password: 'password',
+        'g-recaptcha-response': 'empty',
+      });
+    });
+  });
+
+  describe('signup', () => {
+    it('sends captchaToken in payload when provided', async () => {
+      const api = await loadApi();
+      mockFetch.mockResolvedValueOnce(
+        makeResponse(200, JSON.stringify({ token: 'jwt-token' }), 'text/plain'),
+      );
+
+      await api.signup('test@example.com', 'password', 'testuser', 'valid-token');
+
+      const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/signup');
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body as string)).toEqual({
+        email: 'test@example.com',
+        password: 'password',
+        alias: 'testuser',
+        'g-recaptcha-response': 'valid-token',
+      });
+    });
+
+    it('sends "empty" for captchaToken when omitted', async () => {
+      const api = await loadApi();
+      mockFetch.mockResolvedValueOnce(
+        makeResponse(200, JSON.stringify({ token: 'jwt-token' }), 'text/plain'),
+      );
+
+      await api.signup('test@example.com', 'password', 'testuser');
+
+      const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/signup');
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body as string)).toEqual({
+        email: 'test@example.com',
+        password: 'password',
+        alias: 'testuser',
+        'g-recaptcha-response': 'empty',
+      });
+    });
+  });
+
   describe('call', () => {
     it('uses GET and correct path when args are empty', async () => {
       vi.stubEnv('VITE_FAAS_URL', 'https://api.metacall.io');
@@ -145,9 +220,10 @@ describe('api-client', () => {
       expect(options.method).toBe('GET');
       expect(options.body).toBeUndefined();
 
-      const auth = options.headers instanceof Headers
-        ? options.headers.get('Authorization')
-        : (options.headers as Record<string, string> | undefined)?.['Authorization'];
+      const auth =
+        options.headers instanceof Headers
+          ? options.headers.get('Authorization')
+          : (options.headers as Record<string, string> | undefined)?.['Authorization'];
       expect(auth).toBe('jwt my-token');
     });
 
@@ -178,6 +254,112 @@ describe('api-client', () => {
       expect(res).toBe('hello');
       const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(url).toBe('https://api.metacall.io/josead/ramda/v1/call/indexBy');
+    });
+  });
+
+  describe('getBaseUrl', () => {
+    it('defaults to http://localhost:9000 when no custom url or env is set', async () => {
+      vi.stubEnv('VITE_FAAS_URL', '');
+      const { getBaseUrl } = await import('@/lib/api-client');
+      expect(getBaseUrl()).toBe('http://localhost:9000');
+    });
+
+    it('uses localStorage faas_url when set', async () => {
+      localStorage.setItem('faas_url', 'http://custom-faas.local:9000');
+      const { getBaseUrl } = await import('@/lib/api-client');
+      expect(getBaseUrl()).toBe('http://custom-faas.local:9000');
+    });
+
+    it('uses VITE_FAAS_URL when set and no localStorage faas_url exists', async () => {
+      vi.stubEnv('VITE_FAAS_URL', 'https://api.metacall.io');
+      const { getBaseUrl } = await import('@/lib/api-client');
+      expect(getBaseUrl()).toBe('https://api.metacall.io');
+    });
+
+    it('prioritizes localStorage over VITE_FAAS_URL', async () => {
+      localStorage.setItem('faas_url', 'http://custom-override:9000');
+      vi.stubEnv('VITE_FAAS_URL', 'https://api.metacall.io');
+      const { getBaseUrl } = await import('@/lib/api-client');
+      expect(getBaseUrl()).toBe('http://custom-override:9000');
+    });
+  });
+
+  describe('billing subscriptions', () => {
+    it('listSubscriptions returns plan count mapping from protocol', async () => {
+      const api = await loadApi();
+      mockFetch.mockResolvedValueOnce(makeResponse(200, ['Essential', 'Standard', 'Premium']));
+
+      const res = await api.listSubscriptions();
+      expect(res).toEqual({
+        Essential: 1,
+        Standard: 1,
+        Premium: 1,
+      });
+    });
+
+    it('listSubscriptionsDeploys returns active deploy objects when available', async () => {
+      const api = await loadApi();
+      const mockDeploys = [
+        { id: 'sub_essential_01', plan: 'Essential', deploy: 'app1', date: 1772479766 },
+        { id: 'sub_premium_03', plan: 'Premium', deploy: '', date: 1772479766 },
+      ];
+      // First call is protocol.listSubscriptionsDeploys() -> hits /api/billing/list-subscriptions
+      mockFetch.mockResolvedValueOnce(makeResponse(200, ['Essential', 'Premium']));
+      // Second call is fallback fetch -> hits /api/billing/list-subscriptions-deploys
+      mockFetch.mockResolvedValueOnce(makeResponse(200, mockDeploys));
+
+      const res = await api.listSubscriptionsDeploys();
+      expect(res).toEqual(mockDeploys);
+    });
+
+    it('listSubscriptionsDeploys maps string array from protocol when fallback is empty', async () => {
+      const api = await loadApi();
+      mockFetch.mockResolvedValueOnce(makeResponse(200, ['Essential', 'Standard']));
+      mockFetch.mockResolvedValueOnce(makeResponse(404, []));
+
+      const res = await api.listSubscriptionsDeploys();
+      expect(res).toHaveLength(2);
+      expect(res[0]).toMatchObject({
+        id: 'sub_essential_01',
+        plan: 'Essential',
+        deploy: '',
+      });
+      expect(res[1]).toMatchObject({
+        id: 'sub_standard_02',
+        plan: 'Standard',
+        deploy: '',
+      });
+    });
+  });
+
+  describe('changePassword', () => {
+    it('posts to change-password and returns true on success', async () => {
+      localStorage.setItem('faas_token', 'my-token');
+      const api = await loadApi();
+
+      mockFetch.mockResolvedValueOnce(makeResponse(200, { message: 'ok' }));
+      const res = await api.changePassword('oldpass123', 'newpass123');
+
+      expect(res).toBe(true);
+      const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/api/account/change-password');
+      expect(options.method).toBe('POST');
+      expect(options.body).toBe(
+        JSON.stringify({ currentPassword: 'oldpass123', newPassword: 'newpass123' }),
+      );
+    });
+  });
+
+  describe('refresh', () => {
+    it('refreshes token, updates localStorage, and returns new token', async () => {
+      localStorage.setItem('faas_token', 'old-token');
+      const api = await loadApi();
+
+      mockFetch.mockResolvedValueOnce(makeResponse(200, 'refreshed-new-token', 'text/plain'));
+      const newToken = await api.refresh();
+
+      expect(newToken).toBe('refreshed-new-token');
+      expect(localStorage.getItem('faas_token')).toBe('refreshed-new-token');
     });
   });
 });

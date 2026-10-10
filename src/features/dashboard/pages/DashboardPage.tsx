@@ -4,6 +4,7 @@ import { useDeployments } from '@/features/deployments/hooks/useDeployments';
 import { api } from '@/lib/api-client';
 import type { Deployment } from '@/shared/types';
 import { AlertTriangle, Plus, RefreshCw, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { DeleteModal } from '@/shared/ui/DeleteModal';
 
 import { DeploymentTable } from '@/features/deployments/components/DeploymentTable';
@@ -154,8 +155,12 @@ function EmptyLaunchpadCard({
   hasSubscription?: boolean;
 }) {
   const { headerBg, plusHover } = getPlanClasses(plan);
-  const bgClass = !hasSubscription ? 'bg-gray-400' : (isAlreadyUsed ? 'bg-gray-300' : headerBg);
-  const hoverClass = !hasSubscription ? 'hover:bg-slate-700 hover:text-white hover:border-slate-700' : (isAlreadyUsed ? '' : plusHover);
+  const bgClass = !hasSubscription ? 'bg-gray-400' : isAlreadyUsed ? 'bg-gray-300' : headerBg;
+  const hoverClass = !hasSubscription
+    ? 'hover:bg-slate-700 hover:text-white hover:border-slate-700'
+    : isAlreadyUsed
+      ? ''
+      : plusHover;
 
   let borderHoverClass = 'hover:border-blue-400';
   if (!hasSubscription) {
@@ -171,21 +176,18 @@ function EmptyLaunchpadCard({
 
   return (
     <div
-      className={`flex flex-col border border-dashed ${!hasSubscription ? 'border-gray-300' : (isAlreadyUsed ? 'border-gray-200' : 'border-gray-300')
-        } bg-white hover:shadow-[0_12px_24px_-10px_rgba(0,0,0,0.15)] hover:-translate-y-1 hover:border-solid ${borderHoverClass} cursor-pointer transition-all duration-300 ease-out`}
+      className={`flex flex-col border border-dashed ${
+        !hasSubscription ? 'border-gray-300' : isAlreadyUsed ? 'border-gray-200' : 'border-gray-300'
+      } bg-white hover:shadow-[0_12px_24px_-10px_rgba(0,0,0,0.15)] hover:-translate-y-1 hover:border-solid ${borderHoverClass} cursor-pointer transition-all duration-300 ease-out`}
       onClick={onClick}
     >
       <div
         className={`flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold text-white ${bgClass}`}
       >
         <span>{!hasSubscription ? 'Locked slot' : 'Empty launchpad'}</span>
-        <span className="opacity-80">
-          {!hasSubscription ? 'Inactive' : getPlanLabel(plan)}
-        </span>
+        <span className="opacity-80">{!hasSubscription ? 'Inactive' : getPlanLabel(plan)}</span>
       </div>
-      <div
-        className="flex items-center justify-between px-6 py-3.5 hover:bg-gray-50 transition-colors"
-      >
+      <div className="flex items-center justify-between px-6 py-3.5 hover:bg-gray-50 transition-colors">
         <span className="text-smd font-medium text-gray-500">
           {!hasSubscription ? 'Activate Plan' : 'Deploy'}
         </span>
@@ -204,29 +206,26 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [subscriptions, setSubscriptions] = useState<Record<string, number>>({});
-  const [loadingSubscriptions, setLoadingSubscriptions] = useState(true);
 
   useEffect(() => {
     let active = true;
-    api.listSubscriptions()
+    api
+      .listSubscriptions()
       .then(subs => {
         if (active) {
           setSubscriptions(subs || {});
-          setLoadingSubscriptions(false);
         }
       })
       .catch(() => {
-        if (active) {
-          setLoadingSubscriptions(false);
-        }
+        // Ignore subscription fetch failure; defaults to empty map
       });
     return () => {
       active = false;
     };
   }, []);
 
-  const [pendingDeployments, setPendingDeployments] = useState<PendingDeploymentEntry[]>(
-    () => readPendingDeployments(),
+  const [pendingDeployments, setPendingDeployments] = useState<PendingDeploymentEntry[]>(() =>
+    readPendingDeployments(),
   );
   const hasPendingDeployments = pendingDeployments.length > 0;
   const {
@@ -272,9 +271,7 @@ export default function DashboardPage() {
 
   const loadingStartedAtBySuffix = useMemo(
     () =>
-      Object.fromEntries(
-        pendingDeployments.map(entry => [entry.suffix, entry.startedAt] as const),
-      ),
+      Object.fromEntries(pendingDeployments.map(entry => [entry.suffix, entry.startedAt] as const)),
     [pendingDeployments],
   );
 
@@ -304,10 +301,13 @@ export default function DashboardPage() {
         pendingDelete.suffix,
         pendingDelete.version ?? 'v1',
       );
+      toast.success('Deployment deleted successfully!');
       setPending(null);
       refetch();
     } catch (err: unknown) {
-      setDeleteError('Failed to delete deployment: ' + ((err as Error).message ?? 'Unknown error'));
+      const msg = 'Failed to delete deployment: ' + ((err as Error).message ?? 'Unknown error');
+      toast.error(msg);
+      setDeleteError(msg);
       setPending(null);
     } finally {
       setDeleting(false);
@@ -318,7 +318,9 @@ export default function DashboardPage() {
   const launchpadSlots = PLAN_ORDER.map(planId => {
     const dep = deployments.find(
       d =>
-        normalizePlan((d as unknown as Record<string, unknown>).plan as string | undefined) === planId,
+        resolveDeploymentPlan(d) === planId ||
+        normalizePlan((d as unknown as Record<string, unknown>).plan as string | undefined) ===
+          planId,
     );
     return { planId, dep: dep ?? null };
   });
@@ -365,24 +367,22 @@ export default function DashboardPage() {
             <NewDeployCard />
             {launchpadSlots.map(({ planId, dep }) =>
               dep ? (
-                <LaunchpadCard
-                  key={planId}
-                  dep={dep}
-                />
+                <LaunchpadCard key={planId} dep={dep} />
               ) : (
                 <EmptyLaunchpadCard
                   key={planId}
                   plan={planId}
                   isAlreadyUsed={deployments.some(
                     d =>
+                      resolveDeploymentPlan(d) === planId ||
                       normalizePlan(
                         (d as unknown as Record<string, unknown>).plan as string | undefined,
                       ) === planId,
                   )}
-                  hasSubscription={true}
+                  hasSubscription={Boolean(subscriptions[planId] && subscriptions[planId] > 0)}
                   onClick={() => {
                     writeStoredPlan(planId);
-                    if (loadingSubscriptions || subscriptions[planId]) {
+                    if (subscriptions[planId]) {
                       navigate('/deployments/new', { state: { plan: planId } });
                     } else {
                       navigate('/plans', { state: { plan: planId } });
@@ -393,7 +393,6 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-
 
         {/* Deployments section */}
         {(loading || visibleDeployments.length > 0) && (

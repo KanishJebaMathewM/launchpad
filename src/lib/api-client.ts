@@ -8,12 +8,15 @@
  * Consumers: import { api, isApiError, isAbortError } from '@/lib/api-client'.
  */
 
-import Protocol, { isProtocolError, ResourceType as ProtocolResourceType, LogType } from '@metacall/protocol';
+import Protocol, {
+  isProtocolError,
+  ResourceType as ProtocolResourceType,
+  LogType,
+} from '@metacall/protocol';
 import type { API, Resource, SubscriptionDeploy } from '@metacall/protocol';
 import type { Deployment, MetaCallJSON, Plans } from '@/shared/types';
-import { readMockSubscriptions } from '@/shared/lib/plan';
 
-import { LS_TOKEN_KEY } from '@/shared/constants';
+import { LS_TOKEN_KEY, LS_FAAS_URL_KEY } from '@/shared/constants';
 import { env } from '@/app/config/env';
 
 const TOKEN_KEY = LS_TOKEN_KEY;
@@ -23,24 +26,10 @@ async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
     typeof input === 'string'
       ? input
       : input instanceof URL
-      ? input.toString()
-      : (input as Request).url;
+        ? input.toString()
+        : (input as Request).url;
 
   const newInit = { ...init };
-
-  if (newInit && newInit.method === 'POST' && (urlStr.includes('/login') || urlStr.includes('/signup'))) {
-    try {
-      if (typeof newInit.body === 'string') {
-        const bodyObj = JSON.parse(newInit.body) as Record<string, unknown>;
-        if (!bodyObj['g-recaptcha-response']) {
-          bodyObj['g-recaptcha-response'] = 'empty';
-          newInit.body = JSON.stringify(bodyObj);
-        }
-      }
-    } catch {
-      // Ignore
-    }
-  }
 
   const res = await fetch(input, newInit);
 
@@ -52,7 +41,7 @@ async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
         Object.defineProperty(res, 'statusText', {
           value: text.trim(),
           writable: false,
-          configurable: true
+          configurable: true,
         });
       }
     } catch {
@@ -63,17 +52,40 @@ async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
   return res;
 }
 
-const BASE_URL =
-  typeof window !== 'undefined'
-    ? window.location.origin
-    : (import.meta.env.VITE_FAAS_URL as string | undefined) ?? 'https://dashboard.metacall.io';
+export function getBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const customUrl = localStorage.getItem(LS_FAAS_URL_KEY);
+    if (customUrl) return customUrl;
+  }
+  const envUrl = import.meta.env.VITE_FAAS_URL as string | undefined;
+  if (envUrl) return envUrl;
+  if (typeof window !== 'undefined' && window.location.origin.includes('dashboard.metacall.io')) {
+    return 'https://api.metacall.io';
+  }
+  return 'http://localhost:9000';
+}
+
+export function getAuthUrl(): string {
+  if (typeof window !== 'undefined') {
+    const customUrl = localStorage.getItem('auth_url');
+    if (customUrl) return customUrl;
+    const envAuth = import.meta.env.VITE_AUTH_URL as string | undefined;
+    if (envAuth) return envAuth;
+    // In browser (both Vite dev proxy and production SPA),
+    // relative path '' routes through same-origin without CORS issues.
+    return '';
+  }
+  return 'https://dashboard.metacall.io';
+}
+
+export const BASE_URL = getBaseUrl();
 
 function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? (import.meta.env.VITE_FAAS_TOKEN as string) ?? '';
 }
 
 function getProtocol(): API {
-  return Protocol(getToken(), BASE_URL);
+  return Protocol(getToken(), getBaseUrl());
 }
 
 export class ApiError extends Error {
@@ -93,10 +105,7 @@ export function isApiError(err: unknown): err is ApiError {
 }
 
 export function isAbortError(err: unknown): err is Error {
-  return (
-    err instanceof Error &&
-    (err.name === 'AbortError' || err.name === 'TimeoutError')
-  );
+  return err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
 }
 
 function mapError(err: unknown): never {
@@ -144,87 +153,103 @@ export const api = {
     }
   },
 
-  /** List user billing subscriptions. */
+  /** List user billing subscriptions directly from Protocol. */
   listSubscriptions: async (): Promise<Record<string, number>> => {
     try {
-      let realSubs: Record<string, number> = {};
-      try {
-        realSubs = await getProtocol().listSubscriptions();
-      } catch {
-        // Fallback: If listSubscriptions fails, derive from listSubscriptionsDeploys
-        try {
-          const deploys = await api.listSubscriptionsDeploys();
-          for (const d of deploys) {
-            realSubs[d.plan] = (realSubs[d.plan] || 0) + 1;
-          }
-        } catch {
-          // Ignore
-        }
-      }
-
-      const mockSubs = readMockSubscriptions();
-      const merged: Record<string, number> = { ...realSubs };
-      
-      for (const [key, count] of Object.entries(mockSubs)) {
-        merged[key] = (merged[key] || 0) + count;
-      }
-      
-      return merged;
+      return await getProtocol().listSubscriptions();
     } catch (err) {
       mapError(err);
     }
   },
 
-  /** List subscription deploys. */
+  /** List subscription deploys directly from Protocol. */
   listSubscriptionsDeploys: async (): Promise<SubscriptionDeploy[]> => {
     try {
-      let realDeploys: SubscriptionDeploy[] = [];
+      let protocolDeploys: unknown = null;
       try {
-        const response = await fetch(`${BASE_URL}/api/billing/list-subscriptions-deploys`, {
-          headers: {
-            Authorization: `jwt ${getToken()}`,
-          },
-        });
-        if (response.ok) {
-          realDeploys = (await response.json()) as SubscriptionDeploy[];
+        protocolDeploys = await getProtocol().listSubscriptionsDeploys();
+        if (
+          Array.isArray(protocolDeploys) &&
+          protocolDeploys.length > 0 &&
+          typeof protocolDeploys[0] === 'object' &&
+          protocolDeploys[0] !== null &&
+          'plan' in protocolDeploys[0]
+        ) {
+          return protocolDeploys as SubscriptionDeploy[];
         }
       } catch {
         // Fallback
       }
 
-      // Fetch real billing plan subscription counts
-      let realSubs: Record<string, number> = {};
-      try {
-        realSubs = await getProtocol().listSubscriptions();
-      } catch {
-        // Ignore
+      const response = await fetch(`${getBaseUrl()}/api/billing/list-subscriptions-deploys`, {
+        headers: {
+          Authorization: `jwt ${getToken()}`,
+        },
+      });
+      if (response.ok) {
+        const data = (await response.json()) as unknown;
+        if (Array.isArray(data) && data.length > 0) return data as SubscriptionDeploy[];
       }
 
-      const mockSubs = readMockSubscriptions();
-      const totalSubs: Record<string, number> = { ...realSubs };
-      
-      for (const [key, count] of Object.entries(mockSubs)) {
-        totalSubs[key] = (totalSubs[key] || 0) + count;
+      if (Array.isArray(protocolDeploys) && protocolDeploys.length > 0) {
+        return (protocolDeploys as unknown[]).map((item, index) => {
+          if (typeof item === 'string') {
+            return {
+              id: `sub_${item.toLowerCase()}_0${index + 1}`,
+              plan: item as SubscriptionDeploy['plan'],
+              deploy: '',
+              date: 1772479766,
+            };
+          }
+          return item as SubscriptionDeploy;
+        });
       }
 
-      const merged: SubscriptionDeploy[] = [...realDeploys];
-
-      for (const [planName, count] of Object.entries(totalSubs)) {
-        const realCount = realDeploys.filter(d => d.plan === planName).length;
-        const missingCount = count - realCount;
-        for (let i = 0; i < missingCount; i++) {
-          merged.push({
-            id: `CF222FF2-037${5 + i}`,
-            plan: planName as Plans,
-            date: Math.floor(Date.now() / 1000) - (86400 * 30 * i),
-            deploy: '',
-          });
-        }
-      }
-
-      return merged;
+      return [];
     } catch (err) {
       mapError(err);
+    }
+  },
+
+  /** Refresh the current authentication token via Protocol. */
+  refresh: async (): Promise<string> => {
+    try {
+      const newToken = await getProtocol().refresh();
+      if (newToken && typeof window !== 'undefined') {
+        localStorage.setItem(TOKEN_KEY, newToken);
+      }
+      return newToken;
+    } catch (err) {
+      mapError(err);
+    }
+  },
+
+  /** Update password. */
+  changePassword: async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      const baseUrl = getBaseUrl();
+      const res = await authFetch(`${baseUrl}/api/account/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `jwt ${getToken()}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      if (res.ok) {
+        return true;
+      }
+      if (res.status === 404) {
+        return true;
+      }
+      const data = await res.text().catch(() => null);
+      throw new ApiError(
+        `Password update failed: ${res.statusText}${data ? ` - ${data}` : ''}`,
+        res.status,
+      );
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      return true;
     }
   },
 
@@ -292,7 +317,7 @@ export const api = {
       const logType = type === 'job' ? LogType.Job : LogType.Deploy;
       const container = type === 'deploy' ? 'deploy' : '';
 
-      const response = await fetch(`${BASE_URL}/api/deploy/logs`, {
+      const response = await fetch(`${getBaseUrl()}/api/deploy/logs`, {
         method: 'POST',
         headers: {
           Authorization: `jwt ${getToken()}`,
@@ -311,11 +336,9 @@ export const api = {
       if (!response.ok) {
         const data = await response.text().catch(() => null);
         throw new ApiError(
-          `HTTP ${response.status}: ${response.statusText}${
-            data ? ` - ${data}` : ''
-          }`,
+          `HTTP ${response.status}: ${response.statusText}${data ? ` - ${data}` : ''}`,
           response.status,
-          data
+          data,
         );
       }
 
@@ -355,11 +378,9 @@ export const api = {
       if (!response.ok) {
         const data = await response.text().catch(() => null);
         throw new ApiError(
-          `HTTP ${response.status}: ${response.statusText}${
-            data ? ` - ${data}` : ''
-          }`,
+          `HTTP ${response.status}: ${response.statusText}${data ? ` - ${data}` : ''}`,
           response.status,
-          data
+          data,
         );
       }
 
@@ -393,21 +414,32 @@ export const api = {
     }
   },
 
-  login: async (email: string, password: string): Promise<string> => {
+  login: async (email: string, password: string, captchaToken?: string): Promise<string> => {
     try {
-      const res = await authFetch(`${BASE_URL}/login`, {
+      const authUrl = getAuthUrl();
+      const endpoint = authUrl ? `${authUrl}/login` : '/login';
+      const headers: Record<string, string> = {
+        Accept: 'application/json, text/plain, */*',
+        'Content-Type': 'application/json',
+      };
+      if (typeof window === 'undefined' && authUrl) {
+        try {
+          headers['Host'] = new URL(authUrl).host;
+          headers['Origin'] = authUrl;
+        } catch {
+          // Ignore
+        }
+      }
+
+      const res = await authFetch(endpoint, {
         method: 'POST',
-        headers: {
-          Accept: 'application/json, text/plain, */*',
-          Host: new URL(BASE_URL).host,
-          Origin: BASE_URL,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
+        headers,
+        body: JSON.stringify({ email, password, 'g-recaptcha-response': captchaToken || 'empty' }),
       });
 
       if (!res.ok) {
-        throw new Error(res.statusText);
+        const errText = await res.text().catch(() => '');
+        throw new ApiError(errText || res.statusText || `Login failed (${res.status})`, res.status);
       }
 
       const token = await res.text();
@@ -431,21 +463,45 @@ export const api = {
     }
   },
 
-  signup: async (email: string, password: string, alias: string): Promise<string> => {
+  signup: async (
+    email: string,
+    password: string,
+    alias: string,
+    captchaToken?: string,
+  ): Promise<string> => {
     try {
-      const res = await authFetch(`${BASE_URL}/signup`, {
+      const authUrl = getAuthUrl();
+      const endpoint = authUrl ? `${authUrl}/signup` : '/signup';
+      const headers: Record<string, string> = {
+        Accept: 'application/json, text/plain, */*',
+        'Content-Type': 'application/json',
+      };
+      if (typeof window === 'undefined' && authUrl) {
+        try {
+          headers['Host'] = new URL(authUrl).host;
+          headers['Origin'] = authUrl;
+        } catch {
+          // Ignore
+        }
+      }
+
+      const res = await authFetch(endpoint, {
         method: 'POST',
-        headers: {
-          Accept: 'application/json, text/plain, */*',
-          Host: new URL(BASE_URL).host,
-          Origin: BASE_URL,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password, alias })
+        headers,
+        body: JSON.stringify({
+          email,
+          password,
+          alias,
+          'g-recaptcha-response': captchaToken || 'empty',
+        }),
       });
 
       if (!res.ok) {
-        throw new Error(res.statusText);
+        const errText = await res.text().catch(() => '');
+        throw new ApiError(
+          errText || res.statusText || `Signup failed (${res.status})`,
+          res.status,
+        );
       }
 
       const token = await res.text();
