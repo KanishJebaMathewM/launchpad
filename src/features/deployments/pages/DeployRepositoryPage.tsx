@@ -353,6 +353,8 @@ export default function DeployRepositoryPage() {
     const info = parseRepoInfo(repositoryUrl);
     if (!info) return;
 
+    let active = true;
+
     let rawUrl = '';
     if (info.provider === 'github') {
       rawUrl = `https://raw.githubusercontent.com/${info.owner}/${info.repo}`;
@@ -371,6 +373,8 @@ export default function DeployRepositoryPage() {
             language?: string;
             languages?: string[];
           };
+
+          if (!active) return;
 
           let langs: string[] = [];
 
@@ -419,6 +423,10 @@ export default function DeployRepositoryPage() {
     };
 
     fetchMetacall();
+
+    return () => {
+      active = false;
+    };
   }, [repositoryUrl, branchName, branches]);
 
   // Show slot occupied warning page
