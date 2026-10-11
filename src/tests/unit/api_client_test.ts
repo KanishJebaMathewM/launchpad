@@ -348,6 +348,45 @@ describe('api-client', () => {
         JSON.stringify({ currentPassword: 'oldpass123', newPassword: 'newpass123' }),
       );
     });
+
+    it('rejects with status 404 when the server has no change-password endpoint', async () => {
+      localStorage.setItem('faas_token', 'my-token');
+      const api = await loadApi();
+
+      mockFetch.mockResolvedValueOnce(
+        makeResponse(404, "Can't find /api/account/change-password", 'text/plain'),
+      );
+
+      await expect(api.changePassword('oldpass123', 'newpass123')).rejects.toMatchObject({
+        name: 'ApiError',
+        status: 404,
+        message: 'Password change is not available on this server.',
+      });
+    });
+
+    it('rejects when the request cannot reach the server', async () => {
+      localStorage.setItem('faas_token', 'my-token');
+      const api = await loadApi();
+
+      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      await expect(api.changePassword('oldpass123', 'newpass123')).rejects.toMatchObject({
+        name: 'ApiError',
+        message: 'Failed to fetch',
+      });
+    });
+
+    it('rejects with the server message on other error statuses', async () => {
+      localStorage.setItem('faas_token', 'my-token');
+      const api = await loadApi();
+
+      mockFetch.mockResolvedValueOnce(makeResponse(401, 'Invalid current password', 'text/plain'));
+
+      await expect(api.changePassword('oldpass123', 'newpass123')).rejects.toMatchObject({
+        status: 401,
+        message: expect.stringContaining('Invalid current password'),
+      });
+    });
   });
 
   describe('refresh', () => {
