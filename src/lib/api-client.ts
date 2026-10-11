@@ -248,7 +248,7 @@ export const api = {
         return true;
       }
       if (res.status === 404) {
-        return true;
+        throw new ApiError('Password change is not available on this server.', 404);
       }
       const data = await res.text().catch(() => null);
       throw new ApiError(
@@ -257,7 +257,7 @@ export const api = {
       );
     } catch (err) {
       if (err instanceof ApiError) throw err;
-      return true;
+      mapError(err);
     }
   },
 
