@@ -52,22 +52,37 @@ The dashboard already has a solid frontend base:
 ## Local Triad / Launchpad Support
 
 Part of the `metacall/faas` + `metacall/deploy` + `metacall/launchpad` local packaging
-effort. Details: https://github.com/metacall/launchpad/issues/28
+effort. Details: https://github.com/metacall/launchpad/issues/28. Full plan:
+`../../Launchpad packaging implementation/LAUNCHPAD_LOCAL_MODE_PLAN.md`.
 
-- [ ] Add a `main.tsx` bootstrap step that fetches `/__launchpad/config` before the
-      app renders.
-- [ ] Build the FaaS URL resolution chain: launchpad config → `localStorage['faas_url']`
-      → `VITE_FAAS_URL` → same-origin (current behavior last, not first).
-- [ ] If the `/__launchpad/config` fetch 404s or errors, fall through silently to
-      today's behavior — no console errors, no broken render.
-- [ ] Seed `localStorage['faas_token'] = 'local'` when runtime config says
-      `mode: 'local'`, before the router mounts.
-- [ ] Make sure the local-mode token seed only ever runs once and never overwrites a
-      real token a user already logged in with.
-- [ ] Skip the `/login` redirect in `AppRouter.tsx` when running in local mode.
-- [ ] Add a "Local mode — no account" empty state on the Settings page.
-- [ ] Hide or disable the billing/CLI-token panels on the Settings page in local mode.
-- [ ] Add a small "FaaS URL" override field in Settings that writes to
-      `localStorage['faas_url']`, for when a user runs FaaS on a non-default port.
-- [ ] Confirm hosted `dashboard.metacall.io` build is byte-identical when the config
-      probe 404s (no regression for production).
+Shipped in #32 (`src/app/config/runtime.ts`, `src/app/config/env.ts`, `src/main.tsx`):
+
+- [x] `main.tsx` bootstrap step fetches `/__launchpad/config` before the app renders.
+- [x] FaaS URL resolution chain: launchpad config → `localStorage['faas_url']` →
+      `VITE_FAAS_URL` → same-origin.
+- [x] A 404/error/non-JSON response on `/__launchpad/config` falls through silently to
+      today's behavior.
+- [x] `localStorage['faas_token']` is seeded to `'local'` when runtime config says
+      `mode: 'local'`, and only if no token is already stored (never overwrites a real
+      login).
+- [x] The hosted dashboard skips the config fetch entirely when the origin is
+      `dashboard.metacall.io`, so its startup is unaffected.
+- [x] The `/login` redirect is effectively skipped in local mode — not by changing
+      `AppRouter.tsx`, but because `useAuth` (`src/features/auth/hooks/useAuth.tsx`)
+      treats `isLocalMode()` as already signed in, so the route guard never redirects.
+
+Still open (none of these exist yet — verified against the current code):
+
+- [ ] Add a "Local mode — no account" empty state on the Settings page
+      (`src/features/settings/pages/SettingsPage.tsx` still renders the CLI Token,
+      password, and Billing History panels unconditionally).
+- [ ] Hide or disable the billing/CLI-token panels on Settings in local mode (same
+      file — `api.refresh()` and `api.changePassword()` have no local FaaS route to
+      call).
+- [ ] Add a "FaaS URL" field in Settings that writes to `localStorage['faas_url']`
+      (`LS_FAAS_URL_KEY` in `src/shared/constants/index.ts` is read by `api-client.ts`
+      but nothing in the UI writes to it yet).
+- [ ] Decide what Dashboard plan slots and the Deploy wizard's plan gate should do in
+      local mode (currently ungated by `isLocalMode()` anywhere).
+- [ ] Decide what the Logs page should show when FaaS returns its
+      `"TODO: Implement Logs..."` stub instead of real log lines.
