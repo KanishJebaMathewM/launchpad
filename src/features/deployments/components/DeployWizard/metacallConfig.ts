@@ -5,9 +5,5 @@ export interface McConfig {
 }
 
 export function buildJson(languageId: string, files: string[]): string {
-  if (files.length === 0) {
-    return `{\n  "language_id": "${languageId}",\n  "path": ".",\n  "scripts": []\n}`;
-  }
-  const scripts = files.map(f => `    "${f}"`).join(',\n');
-  return `{\n  "language_id": "${languageId}",\n  "path": ".",\n  "scripts": [\n${scripts}\n  ]\n}`;
+  return JSON.stringify({ language_id: languageId, path: '.', scripts: files }, null, 2);
 }
