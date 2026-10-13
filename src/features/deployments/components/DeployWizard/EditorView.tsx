@@ -8,6 +8,7 @@ const EXT_MAP: Record<string, string> = {
   mjs: 'node',
   cjs: 'node',
   ts: 'ts',
+  tsx: 'ts',
   py: 'py',
   pyw: 'py',
   rb: 'rb',
@@ -29,9 +30,9 @@ const LANG_LABEL: Record<string, string> = {
   wasm: 'WASM',
 };
 
-function detectLang(file: string): string {
+function detectLang(file: string): string | undefined {
   const ext = file.split('.').pop()?.toLowerCase() ?? '';
-  return EXT_MAP[ext] ?? 'node';
+  return EXT_MAP[ext];
 }
 
 // Component
@@ -54,6 +55,8 @@ export function EditorView({
     const groups: Record<string, string[]> = {};
     for (const f of selectedFiles) {
       const lang = detectLang(f);
+      // Non-script files (README, package.json, assets…) are still uploaded, just not loaded
+      if (!lang) continue;
       if (!groups[lang]) groups[lang] = [];
       groups[lang].push(f);
     }
