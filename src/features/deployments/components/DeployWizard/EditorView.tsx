@@ -223,8 +223,8 @@ export function EditorView({
               const parts: Array<{ text: string; color?: string }> = [];
               let lastIdx = 0;
 
-              // Match key names (before colon with quotes)
-              const keyRegex = /"([^"]+)"(?=:)/g;
+              // Match key names (before colon with quotes); `\.` keeps escaped quotes inside the string
+              const keyRegex = /"((?:[^"\\]|\\.)+)"(?=:)/g;
               let match;
               while ((match = keyRegex.exec(line)) !== null) {
                 if (match.index > lastIdx) {
@@ -237,7 +237,7 @@ export function EditorView({
               // Match string values (after colon with quotes)
               if (lastIdx < line.length) {
                 const remaining = line.slice(lastIdx);
-                const valueRegex = /: "([^"]+)"| {4}"([^"]+)"/g;
+                const valueRegex = /: "((?:[^"\\]|\\.)+)"| {4}"((?:[^"\\]|\\.)+)"/g;
                 let lastValueIdx = 0;
                 let valueMatch;
                 while ((valueMatch = valueRegex.exec(remaining)) !== null) {
