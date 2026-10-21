@@ -11,8 +11,10 @@
     "!dist/test"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "tsc && node --test dist/test/*.test.js"
+    "build": "node scripts/bundle-ui.mjs && tsc",
+    "build:server": "tsc",
+    "test": "npm run build:server && node --test dist/test/*.test.js",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
