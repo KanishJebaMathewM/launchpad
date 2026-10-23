@@ -330,4 +330,81 @@ describe('DeployRepositoryPage', () => {
     expect(screen.getByText('Python')).toBeInTheDocument();
     expect(screen.queryByText('Node.js')).not.toBeInTheDocument();
   });
+
+  const errorResponse = (status: number, headers: Record<string, string> = {}) =>
+    Promise.resolve({
+      ok: false,
+      status,
+      headers: new Headers(headers),
+      json: () => Promise.resolve({ message: 'error' }),
+    });
+
+  const typeRepoUrl = async (url: string) => {
+    renderComponent();
+    const input = screen.getByPlaceholderText('https://github.com/user/repo');
+    await userEvent.type(input, url);
+    act(() => {
+      vi.advanceTimersByTime(800);
+    });
+  };
+
+  it('LP-0009: shows a rate limit message when GitHub returns 403 with no requests remaining', async () => {
+    fetchMock.mockImplementation(() =>
+      errorResponse(403, { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1700000000' }),
+    );
+
+    await typeRepoUrl('https://github.com/metacall/core');
+
+    expect(
+      await screen.findByText(/GitHub API rate limit reached\. Try again after .+\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/GitHub API error/)).not.toBeInTheDocument();
+  });
+
+  it('LP-0010: shows a rate limit message when only the GitHub branches request is limited', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes('api.github.com/repos/metacall/core/branches')) {
+        return errorResponse(403, { 'x-ratelimit-remaining': '0' });
+      }
+      if (url.includes('api.github.com/repos/metacall/core')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ default_branch: 'main' }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    await typeRepoUrl('https://github.com/metacall/core');
+
+    expect(
+      await screen.findByText(/GitHub API rate limit reached\. Try again later\./),
+    ).toBeInTheDocument();
+  });
+
+  it('LP-0011: keeps the generic error for a GitHub 403 that is not a rate limit', async () => {
+    fetchMock.mockImplementation(() => errorResponse(403, { 'x-ratelimit-remaining': '42' }));
+
+    await typeRepoUrl('https://github.com/metacall/core');
+
+    expect(await screen.findByText(/GitHub API error\./)).toBeInTheDocument();
+  });
+
+  it('LP-0012: shows a rate limit message when GitLab returns 429', async () => {
+    fetchMock.mockImplementation(() => errorResponse(429, { 'retry-after': '60' }));
+
+    await typeRepoUrl('https://gitlab.com/metacall/core');
+
+    expect(
+      await screen.findByText(/GitLab API rate limit reached\. Try again after .+\./),
+    ).toBeInTheDocument();
+  });
+
+  it('LP-0013: still reports a missing repository as not found', async () => {
+    fetchMock.mockImplementation(() => errorResponse(404));
+
+    await typeRepoUrl('https://github.com/metacall/missing');
+
+    expect(await screen.findByText(/Repository not found\./)).toBeInTheDocument();
+  });
 });

@@ -35,6 +35,25 @@ interface EnvRow {
   value: string;
 }
 
+// GitHub reports an exhausted quota as 403 with X-RateLimit-Remaining: 0, GitLab as 429.
+function rateLimitMessage(res: Response, provider: 'GitHub' | 'GitLab'): string | null {
+  if (res.ok) return null;
+  const limited =
+    res.status === 429 || (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0');
+  if (!limited) return null;
+  const reset = res.headers.get('x-ratelimit-reset') ?? res.headers.get('ratelimit-reset');
+  const retryAfter = res.headers.get('retry-after');
+  const resetAt = reset
+    ? Number(reset) * 1000
+    : retryAfter
+      ? Date.now() + Number(retryAfter) * 1000
+      : NaN;
+  const when = Number.isFinite(resetAt)
+    ? `after ${new Date(resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : 'later';
+  return `${provider} API rate limit reached. Try again ${when}.`;
+}
+
 export default function DeployRepositoryPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -248,6 +267,9 @@ export default function DeployRepositoryPage() {
             fetch(`https://api.github.com/repos/${info.owner}/${info.repo}`),
             fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/branches?per_page=100`),
           ]);
+          const rateLimited =
+            rateLimitMessage(repoRes, 'GitHub') ?? rateLimitMessage(branchRes, 'GitHub');
+          if (rateLimited) throw new Error(rateLimited);
           if (!repoRes.ok)
             throw new Error(repoRes.status === 404 ? 'Repository not found.' : 'GitHub API error.');
           const repoData = (await repoRes.json()) as { default_branch?: string };
@@ -260,6 +282,9 @@ export default function DeployRepositoryPage() {
             fetch(`https://gitlab.com/api/v4/projects/${encoded}`),
             fetch(`https://gitlab.com/api/v4/projects/${encoded}/repository/branches?per_page=100`),
           ]);
+          const rateLimited =
+            rateLimitMessage(projRes, 'GitLab') ?? rateLimitMessage(branchRes, 'GitLab');
+          if (rateLimited) throw new Error(rateLimited);
           if (!projRes.ok)
             throw new Error(projRes.status === 404 ? 'Repository not found.' : 'GitLab API error.');
           const projData = (await projRes.json()) as { default_branch?: string };
