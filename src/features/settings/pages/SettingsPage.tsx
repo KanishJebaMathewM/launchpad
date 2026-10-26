@@ -14,11 +14,13 @@ import {
   Download,
 } from 'lucide-react';
 import { CopyButton } from '@/shared/ui/CopyButton';
-import { api } from '@/lib/api-client';
+import { api, getBaseUrl } from '@/lib/api-client';
+import { isLocalMode } from '@/app/config/runtime';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { LS_TOKEN_KEY, LS_EMAIL_KEY } from '@/shared/constants';
 import { normalizePlan } from '@/shared/lib/plan';
 import { downloadInvoicePDF, formatInvoiceNumber } from '../utils/invoice';
+import { LocalModeSettings } from '../components/LocalModeSettings';
 import type { Deployment } from '@/shared/types';
 import type { SubscriptionDeploy } from '@metacall/protocol';
 
@@ -71,6 +73,7 @@ const PdfIcon = ({ className = '', size = 16 }: PdfIconProps) => (
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const localMode = isLocalMode();
   const [email] = useState(() => localStorage.getItem(LS_EMAIL_KEY) ?? 'example@gmail.com');
   const [vatId, setVatId] = useState(() => localStorage.getItem('faas_vat_id') ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -103,8 +106,10 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    // Local FaaS has no billing, so there is nothing to load
+    if (localMode) return;
     fetchSettingsData();
-  }, [fetchSettingsData]);
+  }, [fetchSettingsData, localMode]);
 
   const billingHistory = useMemo(() => {
     if (subDeploys.length > 0) {
@@ -235,6 +240,8 @@ export default function SettingsPage() {
     localStorage.removeItem('faas_vat_id');
     logout();
   };
+
+  if (localMode) return <LocalModeSettings faasUrl={getBaseUrl()} />;
 
   return (
     <div className="grow flex flex-col items-center justify-start p-4 bg-white animate-in fade-in duration-500">
