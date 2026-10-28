@@ -232,7 +232,6 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = () => {
     if (!confirm('Delete local account data and sign out?')) return;
-    localStorage.removeItem('faas_vat_id');
     logout();
   };
 
