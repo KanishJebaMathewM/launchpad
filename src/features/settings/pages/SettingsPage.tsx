@@ -230,10 +230,21 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteAccount = () => {
-    if (!confirm('Delete local account data and sign out?')) return;
-    localStorage.removeItem('faas_vat_id');
-    logout();
+  const handleDeleteAccount = async () => {
+    if (!confirm('Permanently delete your account? This action cannot be undone.')) return;
+
+    setFeedbackMessage(null);
+    try {
+      await api.deleteAccount();
+      localStorage.removeItem('faas_vat_id');
+      logout();
+    } catch (err: unknown) {
+      const error = err as Error;
+      setFeedbackMessage({
+        type: 'error',
+        text: error.message || 'Failed to delete account.',
+      });
+    }
   };
 
   return (
