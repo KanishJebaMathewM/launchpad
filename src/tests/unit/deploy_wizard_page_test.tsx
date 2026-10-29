@@ -116,7 +116,7 @@ describe('DeployWizardPage Toast Notifications', () => {
         packages: {},
         ports: [],
         status: 'ready',
-      },
+      } as never,
     ]);
     localStorage.setItem(
       'faas_deployment_plan_map',
