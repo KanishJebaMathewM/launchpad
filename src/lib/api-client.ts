@@ -205,6 +205,7 @@ export const api = {
             return {
               id: `sub_${item.toLowerCase()}_0${index + 1}`,
               plan: item as SubscriptionDeploy['plan'],
+              date: 0,
               deploy: '',
             };
           }
