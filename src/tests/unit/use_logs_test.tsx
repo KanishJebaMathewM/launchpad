@@ -97,7 +97,57 @@ describe('useLogs polling', () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 
-  it.each(['ready', 'failed', 'error', 'fail', 'stopped'])(
+  it('continues polling while the deployment is ready and serving requests', async () => {
+    mockedApi.inspectByName.mockResolvedValue(deploymentWithStatus('ready'));
+
+    renderHook(() => useLogs('my-app', 'my-prefix', 1000));
+    await flushHook();
+
+    expect(mockedApi.logs).toHaveBeenCalledTimes(1);
+    expect(mockedApi.inspectByName).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(mockedApi.logs).toHaveBeenCalledTimes(2);
+    expect(mockedApi.inspectByName).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('stops polling when a deleted deployment returns a 404', async () => {
+    const notFound = Object.assign(new Error('not found'), { status: 404 });
+    mockedApi.inspectByName.mockRejectedValue(notFound);
+
+    const { result } = renderHook(() => useLogs('my-app', 'my-prefix', 1000));
+    await flushHook();
+
+    expect(result.current.logs).toHaveLength(1);
+    expect(result.current.error).toBeNull();
+    expect(mockedApi.inspectByName).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mockedApi.logs).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps logs visible when deployment inspection transiently fails', async () => {
+    mockedApi.inspectByName.mockRejectedValue(new Error('temporary inspection failure'));
+
+    const { result } = renderHook(() => useLogs('my-app', 'my-prefix', 1000));
+    await flushHook();
+
+    expect(result.current.logs).toEqual([
+      { timestamp: '12:00:00', level: 'info', message: '[app] started' },
+    ]);
+    expect(result.current.error).toBeNull();
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it.each(['failed', 'error', 'fail', 'stopped'])(
     'stops polling terminal deployment status "%s"',
     async status => {
       mockedApi.inspectByName.mockResolvedValue(deploymentWithStatus(status));

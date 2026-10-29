@@ -18,12 +18,13 @@ function stripAnsi(value: string): string {
 }
 
 function isTerminalStatus(status: unknown): boolean {
+  return status === 'failed' || status === 'error' || status === 'fail' || status === 'stopped';
+}
+
+function isNotFoundError(err: unknown): boolean {
   return (
-    status === 'ready' ||
-    status === 'failed' ||
-    status === 'error' ||
-    status === 'fail' ||
-    status === 'stopped'
+    err instanceof Error &&
+    (/not found/i.test(err.message) || (err as Error & { status?: number }).status === 404)
   );
 }
 
@@ -166,11 +167,15 @@ export function useLogs(suffix: string, prefix: string, pollIntervalMs = 5000): 
       } catch (err) {
         if (isAbortError(err)) return;
         if (controller.signal.aborted) return;
+
+        if (isNotFoundError(err)) {
+          terminal = true;
+          clearTimer();
+          setError(failureMessage);
+          return;
+        }
+
         failed = true;
-        failureMessage ??=
-          isApiError(err) || err instanceof Error
-            ? (err.message ?? 'Failed to check deployment status.')
-            : 'Failed to check deployment status.';
       }
 
       if (controller.signal.aborted) return;
